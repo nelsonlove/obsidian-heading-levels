@@ -4,21 +4,35 @@ Promote and demote Markdown headings straight from the Obsidian editor, with
 **org-mode-style hotkeys**. No outline pane required — your cursor and selection
 drive everything.
 
-## Motions
+## The org-mode arrow keys
 
-Canonical org-mode modifier mapping (**←** promotes toward H1, **→** demotes toward H6):
+Just like Emacs org-mode, the arrow keys are **context-sensitive** (**←**
+promotes toward H1, **→** demotes toward H6):
 
-| Hotkey (default) | Command | What it does |
+| Key | At the **front** of a heading | Anywhere else |
 |---|---|---|
-| `Opt-←` / `Opt-→` | Promote / Demote heading | Shift **just the heading** on the cursor line. With a selection, shift **every heading line the selection touches**. |
-| `Opt-Shift-←` / `Opt-Shift-→` | Promote / Demote heading and subtree | Shift the **heading plus its whole subtree** (children preserved). |
-| _(unbound)_ | Promote / Demote all headings in note | Shift **every heading in the note**. |
+| `opt+←` / `opt+→` | promote / demote **the heading** | normal word-navigation |
+| `opt+shift+←` / `opt+shift+→` | promote / demote **the heading + its subtree** | normal word-selection |
 
-All six are ordinary commands — rebind them in **Settings → Hotkeys** (search
-"Heading Levels").
+"At the front" means the cursor is at or before the first character of the
+heading's title (only the `#`s/spaces to its left). Once you're *into* the
+heading's text — or on any non-heading line — the arrows fall through to macOS's
+native `opt`-word motion, so word navigation keeps working everywhere.
 
-> On macOS `Opt` is the `Alt` modifier. The default `Alt+Arrow` bindings can
-> collide with word-wise cursor motion in some setups; if so, just rebind.
+This is why the keys are handled by a CodeMirror keymap rather than bound as
+commands: a bound command would *always* consume `opt+arrow` and permanently
+break word-nav (which on macOS — and via Karabiner `opt+b`/`opt+f` — is exactly
+`opt+arrow`).
+
+### Commands (unbound by default)
+
+For selection-wide and whole-note edits, six commands are available in the
+palette and rebindable in **Settings → Hotkeys** ("Heading Levels"):
+
+- **Promote / Demote heading** — the heading on the cursor line, or, with a
+  selection, every heading line the selection touches.
+- **Promote / Demote heading and subtree** — the heading plus its subtree.
+- **Promote / Demote all headings in note** — every heading in the note.
 
 ## Behavior notes
 

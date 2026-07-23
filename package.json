@@ -1,6 +1,6 @@
 {
   "name": "obsidian-heading-levels",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Org-mode-style heading promotion/demotion for Obsidian, driven from the editor.",
   "type": "module",
   "main": "main.js",
@@ -14,6 +14,8 @@
   "author": "Nelson Love",
   "license": "MIT",
   "devDependencies": {
+    "@codemirror/state": "^6.0.0",
+    "@codemirror/view": "^6.0.0",
     "@types/node": "^20.11.0",
     "builtin-modules": "^3.3.0",
     "esbuild": "^0.20.0",

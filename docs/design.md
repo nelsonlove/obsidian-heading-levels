@@ -75,19 +75,35 @@ interface ShiftResult { text: string; changed: boolean; message?: string; }
 function shiftHeadings(req: ShiftRequest): ShiftResult;
 ```
 
-### Commands (all bindable in Settings → Hotkeys)
+### Arrow keys — context-sensitive CodeMirror keymap (0.1.1)
 
-| id | name | default hotkey |
-|---|---|---|
-| `promote-heading` | Promote heading | `Alt+ArrowLeft` |
-| `demote-heading` | Demote heading | `Alt+ArrowRight` |
-| `promote-subtree` | Promote heading and subtree | `Alt+Shift+ArrowLeft` |
-| `demote-subtree` | Demote heading and subtree | `Alt+Shift+ArrowRight` |
-| `promote-all` | Promote all headings in note | — |
-| `demote-all` | Demote all headings in note | — |
+`opt+arrow` on macOS **is** word-navigation (natively, and via Karabiner
+`opt+b`/`opt+f` → `opt+arrow`). Binding a command to it would permanently
+consume the key and break word-nav. So instead of default command hotkeys, the
+arrows are handled by a high-precedence CodeMirror keymap that mirrors Emacs
+org-mode's context-sensitivity:
 
-> On macOS `Alt` = Option. These defaults may collide with word-wise cursor
-> motion in some setups; users can rebind in Settings → Hotkeys.
+- `Alt-ArrowLeft/Right` and `Alt-Shift-ArrowLeft/Right`.
+- The handler acts **only when the cursor is at the front of a real heading**
+  (no selection; `col <= headingFrontBoundary(line)`; fence-checked via
+  `parseHeadings`): promote/demote the heading (or subtree with Shift), consume
+  the key.
+- Otherwise it returns `false`, so CodeMirror's native word-motion /
+  word-selection runs — word-nav keeps working everywhere, including within a
+  heading's own text.
+- `headingFrontBoundary(lineText)` (pure, in `headings.ts`) returns the title
+  start column, or null for non-headings.
+
+### Commands (unbound by default; bindable in Settings → Hotkeys)
+
+| id | name |
+|---|---|
+| `promote-heading` / `demote-heading` | Promote / Demote heading (cursor or selection) |
+| `promote-subtree` / `demote-subtree` | Promote / Demote heading and subtree |
+| `promote-all` / `demote-all` | Promote / Demote all headings in note |
+
+These cover selection-wide and whole-note edits; the context-sensitive keymap
+above covers the single-heading-at-cursor org-mode motions.
 
 ## Non-goals (YAGNI)
 

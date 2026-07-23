@@ -54,6 +54,25 @@ interface ParsedHeading extends Heading {
 }
 
 /**
+ * If `lineText` is an ATX heading, return the column where its title text
+ * begins (just past the indent, hashes, and the whitespace after them) — the
+ * boundary at/before which a cursor is considered to be "at the front" of the
+ * heading. Returns null if the line is not an ATX heading.
+ *
+ * NB: this is a per-line check and is NOT fence-aware; callers that must exclude
+ * code-fenced lines should cross-check against {@link parseHeadings}.
+ */
+export function headingFrontBoundary(lineText: string): number | null {
+  const m = HEADING_RE.exec(lineText);
+  if (!m) return null;
+  const indent = m[1];
+  const hashes = m[2];
+  const rest = m[3] ?? "";
+  const lead = /^\s*/.exec(rest)?.[0].length ?? 0;
+  return indent.length + hashes.length + lead;
+}
+
+/**
  * Track fenced-code-block state line by line. A fence opens on a run of 3+
  * backticks/tildes and closes on a same-or-longer run of the same character
  * with no trailing content (info strings are only allowed on the opener).

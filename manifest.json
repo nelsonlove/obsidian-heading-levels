@@ -1,9 +1,9 @@
 {
   "id": "heading-levels",
   "name": "Heading Levels",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "1.5.0",
-  "description": "Promote and demote headings from the editor with org-mode-style hotkeys — single heading, whole subtree, selection, or the entire note.",
+  "description": "Org-mode-style heading promote/demote: opt+arrow at a heading's front promotes/demotes (subtree with shift) and falls through to word-navigation elsewhere. Plus commands for selection and whole-note.",
   "author": "Nelson Love",
   "authorUrl": "https://github.com/nelsonlove/obsidian-heading-levels",
   "isDesktopOnly": false

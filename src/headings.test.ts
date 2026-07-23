@@ -1,5 +1,31 @@
 import { describe, expect, test } from "vitest";
-import { parseHeadings, shiftHeadings } from "./headings";
+import {
+  headingFrontBoundary,
+  parseHeadings,
+  shiftHeadings,
+} from "./headings";
+
+describe("headingFrontBoundary", () => {
+  test("returns the column where the title text starts", () => {
+    expect(headingFrontBoundary("# Title")).toBe(2);
+    expect(headingFrontBoundary("## Title")).toBe(3);
+    expect(headingFrontBoundary("###   Spaced")).toBe(6);
+  });
+
+  test("accounts for leading indentation", () => {
+    expect(headingFrontBoundary("  ## Indented")).toBe(5);
+  });
+
+  test("an empty heading's boundary is just past the hashes", () => {
+    expect(headingFrontBoundary("##")).toBe(2);
+  });
+
+  test("returns null for non-headings", () => {
+    expect(headingFrontBoundary("not a heading")).toBeNull();
+    expect(headingFrontBoundary("#tag")).toBeNull();
+    expect(headingFrontBoundary("####### seven")).toBeNull();
+  });
+});
 
 describe("parseHeadings", () => {
   test("detects ATX headings with their levels and 0-indexed lines", () => {
