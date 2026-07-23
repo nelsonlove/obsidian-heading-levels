@@ -1,9 +1,29 @@
 import { describe, expect, test } from "vitest";
 import {
+  changedLines,
   headingFrontBoundary,
   parseHeadings,
   shiftHeadings,
 } from "./headings";
+
+describe("changedLines", () => {
+  test("returns only the lines that differ, with their new text", () => {
+    expect(changedLines("a\nb\nc", "a\nB\nc")).toEqual([
+      { index: 1, text: "B" },
+    ]);
+  });
+
+  test("returns empty when nothing changed", () => {
+    expect(changedLines("a\nb", "a\nb")).toEqual([]);
+  });
+
+  test("reports multiple changed lines", () => {
+    expect(changedLines("# a\n## b\ntext", "## a\n### b\ntext")).toEqual([
+      { index: 0, text: "## a" },
+      { index: 1, text: "### b" },
+    ]);
+  });
+});
 
 describe("headingFrontBoundary", () => {
   test("returns the column where the title text starts", () => {

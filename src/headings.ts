@@ -124,6 +124,24 @@ export function parseHeadings(text: string): Heading[] {
   }));
 }
 
+/**
+ * The lines that differ between two texts of equal line count, as
+ * `{ index, text }` (0-indexed line, new content). Shared by the Obsidian
+ * command path and the CodeMirror keymap path so their edit diffs can't drift.
+ */
+export function changedLines(
+  oldText: string,
+  newText: string,
+): { index: number; text: string }[] {
+  const oldLines = oldText.split("\n");
+  const newLines = newText.split("\n");
+  const out: { index: number; text: string }[] = [];
+  for (let i = 0; i < oldLines.length; i++) {
+    if (oldLines[i] !== newLines[i]) out.push({ index: i, text: newLines[i] });
+  }
+  return out;
+}
+
 function clamp(level: number): number {
   return Math.min(MAX_LEVEL, Math.max(MIN_LEVEL, level));
 }

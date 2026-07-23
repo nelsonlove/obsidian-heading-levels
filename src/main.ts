@@ -4,6 +4,7 @@ import { EditorView, keymap } from "@codemirror/view";
 import {
   Direction,
   Scope,
+  changedLines,
   headingFrontBoundary,
   parseHeadings,
   shiftHeadings,
@@ -50,19 +51,11 @@ function diffToChanges(
   oldText: string,
   newText: string,
 ): EditorChange[] {
-  const oldLines = oldText.split("\n");
-  const newLines = newText.split("\n");
-  const changes: EditorChange[] = [];
-  for (let i = 0; i < oldLines.length; i++) {
-    if (oldLines[i] !== newLines[i]) {
-      changes.push({
-        from: { line: i, ch: 0 },
-        to: { line: i, ch: editor.getLine(i).length },
-        text: newLines[i],
-      });
-    }
-  }
-  return changes;
+  return changedLines(oldText, newText).map(({ index, text }) => ({
+    from: { line: index, ch: 0 },
+    to: { line: index, ch: editor.getLine(index).length },
+    text,
+  }));
 }
 
 export default class HeadingLevelsPlugin extends Plugin {
@@ -124,6 +117,8 @@ export default class HeadingLevelsPlugin extends Plugin {
     subtree: boolean,
   ): boolean {
     const { state } = view;
+    // Multiple cursors → let native word-nav/-selection handle every one of them.
+    if (state.selection.ranges.length > 1) return false;
     const sel = state.selection.main;
     // A real selection → let native word-selection handle the arrow.
     if (!sel.empty) return false;
@@ -144,13 +139,20 @@ export default class HeadingLevelsPlugin extends Plugin {
       direction,
       scope: { kind: "cursor", line: lineNo, subtree },
     });
-    // Refused (e.g. promote past H1 / demote past H6): consume the key so it
-    // doesn't fall through to a surprising word-nav; org-mode just declines too.
-    if (!result.changed) return true;
+    // Refused (e.g. promote past H1 / demote past H6): fall through to native
+    // word-nav rather than swallowing the key into a dead no-op.
+    if (!result.changed) return false;
 
-    const changes = cmChanges(state, text, result.text);
-    if (changes.length === 0) return true;
-    view.dispatch({ changes, userEvent: "input.heading-levels" });
+    // Only the leading hashes on this line shift (by ±1), so keep the caret at
+    // the same spot: positions after the indent move with the hash count.
+    const delta = direction === "promote" ? -1 : 1;
+    const indentLen = line.text.length - line.text.trimStart().length;
+    const newCol = col <= indentLen ? col : Math.max(0, col + delta);
+    view.dispatch({
+      changes: cmChanges(state, text, result.text),
+      selection: { anchor: line.from + newCol },
+      userEvent: "input.heading-levels",
+    });
     return true;
   }
 
@@ -177,14 +179,8 @@ function cmChanges(
   oldText: string,
   newText: string,
 ): ChangeSpec[] {
-  const oldLines = oldText.split("\n");
-  const newLines = newText.split("\n");
-  const changes: ChangeSpec[] = [];
-  for (let i = 0; i < oldLines.length; i++) {
-    if (oldLines[i] !== newLines[i]) {
-      const line = state.doc.line(i + 1);
-      changes.push({ from: line.from, to: line.to, insert: newLines[i] });
-    }
-  }
-  return changes;
+  return changedLines(oldText, newText).map(({ index, text }) => {
+    const line = state.doc.line(index + 1);
+    return { from: line.from, to: line.to, insert: text };
+  });
 }
