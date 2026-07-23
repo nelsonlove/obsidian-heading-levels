@@ -1,0 +1,10 @@
+{
+  "id": "heading-levels",
+  "name": "Heading Levels",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Promote and demote headings from the editor with org-mode-style hotkeys — single heading, whole subtree, selection, or the entire note.",
+  "author": "Nelson Love",
+  "authorUrl": "https://github.com/nelsonlove/obsidian-heading-levels",
+  "isDesktopOnly": false
+}
