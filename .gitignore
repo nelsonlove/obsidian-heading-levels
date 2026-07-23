@@ -11,3 +11,6 @@ package-lock.json
 
 # obsidian test vault symlink target (if any)
 data.json
+
+# claude code local tooling
+.claude/
