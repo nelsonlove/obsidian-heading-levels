@@ -31,8 +31,17 @@ function scopeFor(editor: Editor, variant: Variant): Scope {
   return { kind: "cursor", line: from.line, subtree: variant === "subtree" };
 }
 
-/** Turn the old→new full-text change into per-line editor changes. */
-function diffToChanges(oldText: string, newText: string): EditorChange[] {
+/**
+ * Turn the old→new full-text change into per-line editor changes. The line
+ * count never changes, so we replace only the lines that differ. `to.ch` comes
+ * from the editor's own line length (authoritative regardless of how the buffer
+ * handles carriage returns), not from the LF-split string.
+ */
+function diffToChanges(
+  editor: Editor,
+  oldText: string,
+  newText: string,
+): EditorChange[] {
   const oldLines = oldText.split("\n");
   const newLines = newText.split("\n");
   const changes: EditorChange[] = [];
@@ -40,7 +49,7 @@ function diffToChanges(oldText: string, newText: string): EditorChange[] {
     if (oldLines[i] !== newLines[i]) {
       changes.push({
         from: { line: i, ch: 0 },
-        to: { line: i, ch: oldLines[i].length },
+        to: { line: i, ch: editor.getLine(i).length },
         text: newLines[i],
       });
     }
@@ -91,7 +100,7 @@ export default class HeadingLevelsPlugin extends Plugin {
       return;
     }
 
-    const changes = diffToChanges(text, result.text);
+    const changes = diffToChanges(editor, text, result.text);
     if (changes.length === 0) return;
     // A single transaction = one undo step; the editor maps the cursor for us.
     editor.transaction({ changes });

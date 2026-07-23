@@ -39,27 +39,18 @@ const MAX_LEVEL = 6;
 
 /** ATX heading: up to 3 leading spaces, 1–6 hashes, then whitespace or EOL. */
 const HEADING_RE = /^( {0,3})(#{1,6})(\s.*)?(\r?)$/;
-/** A code fence line: up to 3 leading spaces then 3+ backticks or tildes. */
-const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+/**
+ * A code fence line: up to 3 leading spaces then 3+ backticks or tildes.
+ * The trailing `\r?` keeps this working on CRLF documents (`.` excludes CR).
+ */
+const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)\r?$/;
 
-interface ParsedLine {
-  raw: string;
-  heading: { indent: string; level: number; rest: string; cr: string } | null;
-}
-
-function parseLine(raw: string, inFence: boolean): ParsedLine {
-  if (inFence) return { raw, heading: null };
-  const m = HEADING_RE.exec(raw);
-  if (!m) return { raw, heading: null };
-  return {
-    raw,
-    heading: {
-      indent: m[1],
-      level: m[2].length,
-      rest: m[3] ?? "",
-      cr: m[4] ?? "",
-    },
-  };
+/** A parsed ATX heading with everything needed to rewrite its line. */
+interface ParsedHeading extends Heading {
+  indent: string;
+  rest: string;
+  /** Trailing carriage return, preserved on CRLF documents. */
+  cr: string;
 }
 
 /**
@@ -88,15 +79,30 @@ function scanFences(lines: string[]): boolean[] {
   return inFence;
 }
 
-export function parseHeadings(text: string): Heading[] {
-  const lines = text.split("\n");
-  const inFence = scanFences(lines);
-  const out: Heading[] = [];
+/** Parse ATX headings from pre-split lines and their fence mask. */
+function parseHeadingLines(lines: string[], inFence: boolean[]): ParsedHeading[] {
+  const out: ParsedHeading[] = [];
   for (let i = 0; i < lines.length; i++) {
-    const p = parseLine(lines[i], inFence[i]);
-    if (p.heading) out.push({ line: i, level: p.heading.level });
+    if (inFence[i]) continue;
+    const m = HEADING_RE.exec(lines[i]);
+    if (!m) continue;
+    out.push({
+      line: i,
+      level: m[2].length,
+      indent: m[1],
+      rest: m[3] ?? "",
+      cr: m[4] ?? "",
+    });
   }
   return out;
+}
+
+export function parseHeadings(text: string): Heading[] {
+  const lines = text.split("\n");
+  return parseHeadingLines(lines, scanFences(lines)).map(({ line, level }) => ({
+    line,
+    level,
+  }));
 }
 
 function clamp(level: number): number {
@@ -112,23 +118,34 @@ function refused(text: string, direction: Direction): ShiftResult {
   return { text, changed: false, message: `Cannot ${verb}.` };
 }
 
+function noTargetMessage(scope: Scope): string {
+  switch (scope.kind) {
+    case "cursor":
+      return "No heading at the cursor.";
+    case "selection":
+      return "No headings in the selection.";
+    case "all":
+      return "No headings in this note.";
+  }
+}
+
 /**
- * Resolve which heading lines an operation targets, plus whether bounds are
- * enforced uniformly (refuse the whole op) or per-heading (clamp).
+ * Resolve which headings an operation targets, plus whether bounds are enforced
+ * uniformly (refuse the whole op) or per-heading (clamp).
  */
 function resolveTargets(
-  headings: Heading[],
+  headings: ParsedHeading[],
   scope: Scope,
-): { lines: number[]; mode: "uniform" | "clamp"; message?: string } {
+): { targets: ParsedHeading[]; mode: "uniform" | "clamp" } {
   if (scope.kind === "all") {
-    return { lines: headings.map((h) => h.line), mode: "uniform" };
+    return { targets: headings, mode: "uniform" };
   }
 
   if (scope.kind === "selection") {
-    const lines = headings
-      .filter((h) => h.line >= scope.fromLine && h.line <= scope.toLine)
-      .map((h) => h.line);
-    return { lines, mode: "clamp" };
+    const targets = headings.filter(
+      (h) => h.line >= scope.fromLine && h.line <= scope.toLine,
+    );
+    return { targets, mode: "clamp" };
   }
 
   // cursor: nearest heading at or before the cursor line.
@@ -137,60 +154,54 @@ function resolveTargets(
     if (headings[i].line <= scope.line) idx = i;
     else break;
   }
-  if (idx === -1) {
-    return { lines: [], mode: "uniform", message: "No heading here." };
-  }
+  if (idx === -1) return { targets: [], mode: "uniform" };
 
   if (!scope.subtree) {
-    return { lines: [headings[idx].line], mode: "uniform" };
+    return { targets: [headings[idx]], mode: "uniform" };
   }
 
   // subtree: the heading plus following headings deeper than it.
   const rootLevel = headings[idx].level;
-  const lines = [headings[idx].line];
+  const targets = [headings[idx]];
   for (let i = idx + 1; i < headings.length; i++) {
-    if (headings[i].level > rootLevel) lines.push(headings[i].line);
+    if (headings[i].level > rootLevel) targets.push(headings[i]);
     else break;
   }
-  return { lines, mode: "uniform" };
+  return { targets, mode: "uniform" };
 }
 
 export function shiftHeadings(req: ShiftRequest): ShiftResult {
   const { text, direction, scope } = req;
   const lines = text.split("\n");
   const inFence = scanFences(lines);
-  const headings = parseHeadings(text);
+  const headings = parseHeadingLines(lines, inFence);
 
-  const { lines: targetLines, mode, message } = resolveTargets(headings, scope);
-  if (message) return { text, changed: false, message };
-  if (targetLines.length === 0) return { text, changed: false };
+  const { targets, mode } = resolveTargets(headings, scope);
+  if (targets.length === 0) {
+    return { text, changed: false, message: noTargetMessage(scope) };
+  }
 
   const d = delta(direction);
-  const targetSet = new Set(targetLines);
 
   if (mode === "uniform") {
     // Refuse the whole op if any target would leave the valid range.
-    for (const line of targetLines) {
-      const p = parseLine(lines[line], inFence[line]);
-      if (!p.heading) continue;
-      const next = p.heading.level + d;
+    for (const h of targets) {
+      const next = h.level + d;
       if (next < MIN_LEVEL || next > MAX_LEVEL) {
         return refused(text, direction);
       }
     }
   }
 
-  let changed = false;
-  const newLines = lines.map((raw, i) => {
-    if (!targetSet.has(i)) return raw;
-    const p = parseLine(raw, inFence[i]);
-    if (!p.heading) return raw;
-    const next = clamp(p.heading.level + d);
-    if (next === p.heading.level) return raw;
-    changed = true;
-    return p.heading.indent + "#".repeat(next) + p.heading.rest + p.heading.cr;
-  });
+  const rewrites = new Map<number, string>();
+  for (const h of targets) {
+    const next = clamp(h.level + d);
+    if (next === h.level) continue;
+    rewrites.set(h.line, h.indent + "#".repeat(next) + h.rest + h.cr);
+  }
 
-  if (!changed) return refused(text, direction);
+  if (rewrites.size === 0) return refused(text, direction);
+
+  const newLines = lines.map((raw, i) => rewrites.get(i) ?? raw);
   return { text: newLines.join("\n"), changed: true };
 }

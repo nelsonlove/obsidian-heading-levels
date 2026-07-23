@@ -207,13 +207,14 @@ describe("shiftHeadings — selection (clamps independently)", () => {
     expect(r.changed).toBe(true);
   });
 
-  test("no headings in selection is a no-op", () => {
+  test("no headings in selection is a no-op with a message", () => {
     const r = shiftHeadings({
       text: "# A\nplain\ntext",
       direction: "demote",
       scope: { kind: "selection", fromLine: 1, toLine: 2 },
     });
     expect(r.changed).toBe(false);
+    expect(r.message).toBeTruthy();
   });
 });
 
@@ -246,6 +247,16 @@ describe("shiftHeadings — all headings in note", () => {
     expect(r.changed).toBe(false);
   });
 
+  test("a note with no headings is a no-op with a message", () => {
+    const r = shiftHeadings({
+      text: "just some\nplain text",
+      direction: "demote",
+      scope: { kind: "all" },
+    });
+    expect(r.changed).toBe(false);
+    expect(r.message).toBeTruthy();
+  });
+
   test("ignores headings inside code fences", () => {
     const r = shiftHeadings({
       text: "# A\n```\n# fake\n```\n## B",
@@ -264,6 +275,15 @@ describe("shiftHeadings — formatting preservation", () => {
       scope: { kind: "all" },
     });
     expect(r.text).toBe("## A\r\ntext\r\n### B");
+  });
+
+  test("detects code fences in CRLF documents (no corruption inside)", () => {
+    const r = shiftHeadings({
+      text: "# A\r\n```\r\n# fake\r\n```\r\n## B",
+      direction: "demote",
+      scope: { kind: "all" },
+    });
+    expect(r.text).toBe("## A\r\n```\r\n# fake\r\n```\r\n### B");
   });
 
   test("preserves a trailing newline", () => {
