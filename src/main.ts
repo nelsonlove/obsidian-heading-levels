@@ -1,14 +1,5 @@
 import { Editor, EditorChange, Notice, Plugin } from "obsidian";
-import { ChangeSpec, EditorState, Extension, Prec } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
-import {
-  Direction,
-  Scope,
-  changedLines,
-  headingFrontBoundary,
-  parseHeadings,
-  shiftHeadings,
-} from "./headings";
+import { Direction, Scope, changedLines, shiftHeadings } from "./headings";
 
 type Variant = "heading" | "subtree" | "all";
 
@@ -60,12 +51,8 @@ function diffToChanges(
 
 export default class HeadingLevelsPlugin extends Plugin {
   async onload() {
-    // Commands are unbound by default: `opt+arrow` is macOS word-navigation, so
-    // binding a command to it would hijack word-nav everywhere. Instead we
-    // handle the arrows via a CodeMirror keymap that acts only at a heading's
-    // front and otherwise falls through to native word-nav (see below). These
-    // commands stay available for the palette, selection, and whole-note use,
-    // and can be bound to any non-conflicting hotkey in Settings → Hotkeys.
+    // Commands ship unbound: bind them to any non-conflicting hotkey in
+    // Settings → Hotkeys.
     const cmd = (
       id: string,
       name: string,
@@ -85,75 +72,6 @@ export default class HeadingLevelsPlugin extends Plugin {
     cmd("demote-subtree", "Demote heading and subtree", "demote", "subtree");
     cmd("promote-all", "Promote all headings in note", "promote", "all");
     cmd("demote-all", "Demote all headings in note", "demote", "all");
-
-    this.registerEditorExtension(this.headingKeymap());
-  }
-
-  /**
-   * Org-mode-style context-sensitive arrow handling. At the *front* of a
-   * heading, `opt+arrow` promotes/demotes (and `opt+shift+arrow` the subtree);
-   * anywhere else the handler returns false so CodeMirror's native word-motion
-   * (and word-selection with Shift) runs instead — which is what keeps macOS /
-   * Karabiner `opt`-based word navigation working.
-   */
-  private headingKeymap(): Extension {
-    const bind = (key: string, direction: Direction, subtree: boolean) => ({
-      key,
-      run: (view: EditorView) => this.handleArrowKey(view, direction, subtree),
-    });
-    return Prec.highest(
-      keymap.of([
-        bind("Alt-ArrowLeft", "promote", false),
-        bind("Alt-ArrowRight", "demote", false),
-        bind("Alt-Shift-ArrowLeft", "promote", true),
-        bind("Alt-Shift-ArrowRight", "demote", true),
-      ]),
-    );
-  }
-
-  private handleArrowKey(
-    view: EditorView,
-    direction: Direction,
-    subtree: boolean,
-  ): boolean {
-    const { state } = view;
-    // Multiple cursors → let native word-nav/-selection handle every one of them.
-    if (state.selection.ranges.length > 1) return false;
-    const sel = state.selection.main;
-    // A real selection → let native word-selection handle the arrow.
-    if (!sel.empty) return false;
-
-    const line = state.doc.lineAt(sel.head);
-    const col = sel.head - line.from;
-    const boundary = headingFrontBoundary(line.text);
-    // Not a heading, or the cursor is past the front of the title → word-nav.
-    if (boundary === null || col > boundary) return false;
-
-    // Confirm it's a real heading (fence-aware) before acting.
-    const text = state.doc.toString();
-    const lineNo = line.number - 1;
-    if (!parseHeadings(text).some((h) => h.line === lineNo)) return false;
-
-    const result = shiftHeadings({
-      text,
-      direction,
-      scope: { kind: "cursor", line: lineNo, subtree },
-    });
-    // Refused (e.g. promote past H1 / demote past H6): fall through to native
-    // word-nav rather than swallowing the key into a dead no-op.
-    if (!result.changed) return false;
-
-    // Only the leading hashes on this line shift (by ±1), so keep the caret at
-    // the same spot: positions after the indent move with the hash count.
-    const delta = direction === "promote" ? -1 : 1;
-    const indentLen = line.text.length - line.text.trimStart().length;
-    const newCol = col <= indentLen ? col : Math.max(0, col + delta);
-    view.dispatch({
-      changes: cmChanges(state, text, result.text),
-      selection: { anchor: line.from + newCol },
-      userEvent: "input.heading-levels",
-    });
-    return true;
   }
 
   private run(editor: Editor, direction: Direction, variant: Variant) {
@@ -171,16 +89,4 @@ export default class HeadingLevelsPlugin extends Plugin {
     // A single transaction = one undo step; the editor maps the cursor for us.
     editor.transaction({ changes });
   }
-}
-
-/** Per-line CodeMirror changes from an old→new full-text diff (line count fixed). */
-function cmChanges(
-  state: EditorState,
-  oldText: string,
-  newText: string,
-): ChangeSpec[] {
-  return changedLines(oldText, newText).map(({ index, text }) => {
-    const line = state.doc.line(index + 1);
-    return { from: line.from, to: line.to, insert: text };
-  });
 }

@@ -126,8 +126,7 @@ export function parseHeadings(text: string): Heading[] {
 
 /**
  * The lines that differ between two texts of equal line count, as
- * `{ index, text }` (0-indexed line, new content). Shared by the Obsidian
- * command path and the CodeMirror keymap path so their edit diffs can't drift.
+ * `{ index, text }` (0-indexed line, new content).
  */
 export function changedLines(
   oldText: string,

@@ -84,7 +84,7 @@ describe("parseHeadings", () => {
   });
 });
 
-describe("shiftHeadings — cursor, single heading (opt-arrow)", () => {
+describe("shiftHeadings — cursor, single heading", () => {
   test("demote adds one hash to the heading on the cursor line", () => {
     const r = shiftHeadings({
       text: "# A\ntext\n## B",
@@ -171,7 +171,7 @@ describe("shiftHeadings — cursor, single heading (opt-arrow)", () => {
   });
 });
 
-describe("shiftHeadings — cursor, subtree (opt-shift-arrow)", () => {
+describe("shiftHeadings — cursor, subtree", () => {
   test("demote shifts the heading and all descendants uniformly", () => {
     const r = shiftHeadings({
       text: "## A\n### B\ntext\n## C",

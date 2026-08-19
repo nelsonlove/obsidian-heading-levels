@@ -3,7 +3,7 @@
   "name": "Heading Levels",
   "version": "0.1.1",
   "minAppVersion": "1.5.0",
-  "description": "Org-mode-style heading promote/demote: opt+arrow at a heading's front promotes/demotes (subtree with shift) and falls through to word-navigation elsewhere. Plus commands for selection and whole-note.",
+  "description": "Org-mode-style heading promote/demote commands: heading, subtree, selection, and whole-note variants. Unbound by default — assign hotkeys in Settings → Hotkeys.",
   "author": "Nelson Love",
   "authorUrl": "https://github.com/nelsonlove/obsidian-heading-levels",
   "isDesktopOnly": false
