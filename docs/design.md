@@ -9,28 +9,30 @@ Give the editor the four org-mode heading motions, plus whole-note and
 selection variants:
 
 - **Promote** = fewer `#` (toward H1). **Demote** = more `#` (toward H6).
-- Canonical org-mode modifier mapping:
-  - `opt-←/→` → act on the **heading line only**.
-  - `opt-shift-←/→` → act on the **heading + its subtree** (children preserved).
+- Variants: **heading** (the heading line only), **subtree** (the heading + its
+  subtree, children preserved), **all** (every heading in the note).
+
+All six operations are commands — unbound by default, bindable in
+**Settings → Hotkeys**. The plugin defines no hotkeys of its own.
 
 ## Semantics
 
 The same commands adapt to editor context:
 
-| Trigger | No selection (cursor) | Selection present |
+| Command | No selection (cursor) | Selection present |
 |---|---|---|
-| **opt-←/→** ("heading") | shift the current heading line only | shift every heading line the selection touches |
-| **opt-shift-←/→** ("subtree") | shift current heading + its subtree | same as above (shift every heading line in selection) |
-| **"All headings" command** (no default hotkey) | shift every heading in the note | — |
+| **"heading"** | shift the current heading line only | shift every heading line the selection touches |
+| **"subtree"** | shift current heading + its subtree | same as above (shift every heading line in selection) |
+| **"all"** | shift every heading in the note | — |
 
 Rationale for "Shift ignored when a selection exists": shifting every selected
 heading line already equals the subtree result when a full subtree is selected,
 and is more WYSIWYG when only part of one is selected. Confirmed with user.
 
 Requirement coverage:
-- **All headings in a note** → the dedicated command, or select-all + opt-arrow.
-- **Selected headings** → opt-arrow with a selection.
-- **Single heading + everything below it** → opt-shift-arrow with the cursor in it.
+- **All headings in a note** → the "all" command, or select-all + a "heading" command.
+- **Selected headings** → a "heading" command with a selection.
+- **Single heading + everything below it** → a "subtree" command with the cursor in it.
 
 ## Rules & guards
 
@@ -56,7 +58,7 @@ Requirement coverage:
 
 - `src/headings.ts` — **pure, Obsidian-free** core. Parses headings (fence- and
   ATX-aware) and computes the shifted document. Fully unit-tested.
-- `src/main.ts` — thin plugin glue: registers commands + default hotkeys,
+- `src/main.ts` — thin plugin glue: registers the (unbound) commands,
   translates the editor's cursor/selection into a `ShiftRequest`, calls the core,
   and applies the returned text (or shows the refusal `Notice`).
 
@@ -75,24 +77,14 @@ interface ShiftResult { text: string; changed: boolean; message?: string; }
 function shiftHeadings(req: ShiftRequest): ShiftResult;
 ```
 
-### Arrow keys — context-sensitive CodeMirror keymap (0.1.1)
+### Hotkeys — commands only, no plugin-defined bindings
 
-`opt+arrow` on macOS **is** word-navigation (natively, and via Karabiner
-`opt+b`/`opt+f` → `opt+arrow`). Binding a command to it would permanently
-consume the key and break word-nav. So instead of default command hotkeys, the
-arrows are handled by a high-precedence CodeMirror keymap that mirrors Emacs
-org-mode's context-sensitivity:
-
-- `Alt-ArrowLeft/Right` and `Alt-Shift-ArrowLeft/Right`.
-- The handler acts **only when the cursor is at the front of a real heading**
-  (no selection; `col <= headingFrontBoundary(line)`; fence-checked via
-  `parseHeadings`): promote/demote the heading (or subtree with Shift), consume
-  the key.
-- Otherwise it returns `false`, so CodeMirror's native word-motion /
-  word-selection runs — word-nav keeps working everywhere, including within a
-  heading's own text.
-- `headingFrontBoundary(lineText)` (pure, in `headings.ts`) returns the title
-  start column, or null for non-headings.
+0.1.1 shipped a high-precedence CodeMirror keymap on `Alt-ArrowLeft/Right`
+(and Shift variants) that acted only at a heading's front and fell through to
+word-nav elsewhere. It was removed: the plugin defines no key bindings outside
+Obsidian's Settings → Hotkeys interface. `headingFrontBoundary(lineText)`
+(pure, in `headings.ts`) was that keymap's front-of-heading test and remains
+in the core module.
 
 ### Commands (unbound by default; bindable in Settings → Hotkeys)
 
@@ -101,9 +93,6 @@ org-mode's context-sensitivity:
 | `promote-heading` / `demote-heading` | Promote / Demote heading (cursor or selection) |
 | `promote-subtree` / `demote-subtree` | Promote / Demote heading and subtree |
 | `promote-all` / `demote-all` | Promote / Demote all headings in note |
-
-These cover selection-wide and whole-note edits; the context-sensitive keymap
-above covers the single-heading-at-cursor org-mode motions.
 
 ## Non-goals (YAGNI)
 
