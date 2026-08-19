@@ -5,7 +5,7 @@ editor (no sidebar/outline pane required).
 
 ## Goal
 
-Give the editor the four org-mode heading motions, plus whole-note and
+Give the editor the four org-mode heading operations, plus whole-note and
 selection variants:
 
 - **Promote** = fewer `#` (toward H1). **Demote** = more `#` (toward H6).
@@ -82,9 +82,10 @@ function shiftHeadings(req: ShiftRequest): ShiftResult;
 0.1.1 shipped a high-precedence CodeMirror keymap on `Alt-ArrowLeft/Right`
 (and Shift variants) that acted only at a heading's front and fell through to
 word-nav elsewhere. It was removed: the plugin defines no key bindings outside
-Obsidian's Settings → Hotkeys interface. `headingFrontBoundary(lineText)`
-(pure, in `headings.ts`) was that keymap's front-of-heading test and remains
-in the core module.
+Obsidian's Settings → Hotkeys interface. `headingFrontBoundary(lineText)` and the
+`parseHeadings` wrapper (pure, in `headings.ts`) were that keymap's
+front-of-heading test and fence-aware confirmation check; both remain exported
+and tested in the core module.
 
 ### Commands (unbound by default; bindable in Settings → Hotkeys)
 
