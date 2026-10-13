@@ -78,7 +78,7 @@ export function headingFrontBoundary(lineText: string): number | null {
  * with no trailing content (info strings are only allowed on the opener).
  */
 function scanFences(lines: string[]): boolean[] {
-  const inFence: boolean[] = new Array(lines.length);
+  const inFence: boolean[] = new Array<boolean>(lines.length).fill(false);
   let fence: { char: string; len: number } | null = null;
   for (let i = 0; i < lines.length; i++) {
     const m = FENCE_RE.exec(lines[i]);

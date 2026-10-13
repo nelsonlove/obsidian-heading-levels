@@ -1,0 +1,60 @@
+// The Obsidian team's official rules for community plugins (github.com/obsidianmd/eslint-plugin): command ids and names, sentence case in UI strings, no global `app`, forbidden DOM, view and component cleanup, platform guards, manifest and LICENSE shape.
+// Install: npm i -D eslint eslint-plugin-obsidianmd
+import { defineConfig } from "eslint/config";
+import obsidianmd from "eslint-plugin-obsidianmd";
+
+// The sentence-case rule's `brands` option replaces its default list (Obsidian, Obsidian Sync, iOS, macOS, Android, GitHub, …) rather than extending it, so the defaults are read back from the package and the plugin's own name is added. The path is the package's build output; if a release moves it, the list falls back to the few names below.
+let defaultBrands = ["Obsidian", "Obsidian Sync", "Obsidian Publish", "iOS", "macOS", "Android", "Windows", "Linux", "GitHub"];
+try {
+  const mod = await import("eslint-plugin-obsidianmd/dist/lib/rules/ui/brands.js");
+  if (Array.isArray(mod.DEFAULT_BRANDS) && mod.DEFAULT_BRANDS.length) defaultBrands = mod.DEFAULT_BRANDS;
+} catch (e) {
+  console.warn(`eslint.config.mjs: could not read eslint-plugin-obsidianmd's default brand list (${e.message}); sentence case will flag brands the fallback list lacks`);
+}
+// The plugin's own name, from manifest.json at adopt time; an empty name adds nothing (an empty brand would make the matcher loop forever).
+const pluginName = "Heading Levels";
+// This repo's own exact-case terms (UI labels the plugin quotes, Obsidian tab names): `releaseKit.brands` in package.json, which kit-adopt --force never touches. Empty strings are dropped for the same reason.
+let repoBrands = [];
+try {
+  // A JSON import, not node:fs: this config is linted too, and the plugin's own rule objects to Node modules.
+  const pkg = (await import("./package.json", { with: { type: "json" } })).default;
+  repoBrands = (pkg.releaseKit?.brands ?? []).filter((b) => typeof b === "string" && b.length > 0);
+} catch {
+  // no package.json beside the config, or no releaseKit field: nothing to add
+}
+const brands = [...new Set([...defaultBrands, ...(pluginName ? [pluginName] : []), ...repoBrands])];
+
+export default defineConfig([
+  ...obsidianmd.configs.recommended,
+  {
+    languageOptions: {
+      parserOptions: {
+        projectService: {
+          allowDefaultProject: ["eslint.config.*"],
+        },
+      },
+    },
+  },
+  {
+    // Rule options replace, not merge, so the recommended enforceCamelCaseLower is repeated here. Add acronyms as they come up.
+    rules: {
+      "obsidianmd/ui/sentence-case": ["warn", { enforceCamelCaseLower: true, brands, acronyms: [] }],
+    },
+  },
+  {
+    // Test files and test helpers are not plugin code and never run on a phone: node:assert / node:test are the test runner, not a plugin dependency. node:test's test() and describe() return promises by design; they are named as known-safe calls so the floating-promise rule still catches a missing await on vitest's expect(...).rejects.
+    // TypeScript test files only: a snapshot or JSON fixture would otherwise be matched, and naming a typescript-eslint rule for a file that plugin does not handle is a fatal config error. A JavaScript test or helper is outside the tsconfig's project service and needs its own allowDefaultProject entry above before it can be linted at all.
+    files: ["**/*.{test,spec}.{ts,tsx,mts,cts}", "{tests,test,__tests__}/**/*.{ts,tsx,mts,cts}"],
+    rules: {
+      "obsidianmd/no-nodejs-modules": "off",
+      "@typescript-eslint/no-floating-promises": [
+        "error",
+        { allowForKnownSafeCalls: [{ from: "package", package: "node:test", name: ["test", "it", "describe", "suite", "before", "after", "beforeEach", "afterEach"] }] },
+      ],
+    },
+  },
+  {
+    // .claude/ holds Claude Code's git worktrees, full copies of the repo, which a flat config does not ignore by itself.
+    ignores: ["main.js", "node_modules/", "scripts/", "version-bump.mjs", "esbuild.config.mjs", "**/.claude/**"],
+  },
+]);

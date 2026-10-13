@@ -50,7 +50,7 @@ function diffToChanges(
 }
 
 export default class HeadingLevelsPlugin extends Plugin {
-  async onload() {
+  onload() {
     // Commands ship unbound: bind them to any non-conflicting hotkey in
     // Settings → Hotkeys.
     const cmd = (
