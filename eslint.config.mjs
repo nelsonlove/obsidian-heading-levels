@@ -1,6 +1,5 @@
 // The Obsidian team's official rules for community plugins (github.com/obsidianmd/eslint-plugin): command ids and names, sentence case in UI strings, no global `app`, forbidden DOM, view and component cleanup, platform guards, manifest and LICENSE shape.
 // Install: npm i -D eslint eslint-plugin-obsidianmd
-import { readFileSync } from "node:fs";
 import { defineConfig } from "eslint/config";
 import obsidianmd from "eslint-plugin-obsidianmd";
 
@@ -17,7 +16,8 @@ const pluginName = "Heading Levels";
 // This repo's own exact-case terms (UI labels the plugin quotes, Obsidian tab names): `releaseKit.brands` in package.json, which kit-adopt --force never touches. Empty strings are dropped for the same reason.
 let repoBrands = [];
 try {
-  const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
+  // A JSON import, not node:fs: this config is linted too, and the plugin's own rule objects to Node modules.
+  const pkg = (await import("./package.json", { with: { type: "json" } })).default;
   repoBrands = (pkg.releaseKit?.brands ?? []).filter((b) => typeof b === "string" && b.length > 0);
 } catch {
   // no package.json beside the config, or no releaseKit field: nothing to add
