@@ -6,7 +6,8 @@
 //   --root     the plugin repo (default: current directory)
 //   --tag      the git tag being released; must equal the manifest version exactly
 //   --release  also require the built assets (main.js, manifest.json) to exist, and fail on a broken promise in the docs (a template placeholder left in, a private reporting route GitHub says is off)
-//   --promises fail on a broken promise in the docs without the asset checks; kit-release passes it so the refusal happens before anything is written
+//   --promises fail on a broken promise in the docs without the asset checks; kit-release and version-bump.mjs pass it so the refusal happens before anything is written
+//   --bumping-to <version>  accept package.json already at this version while manifest.json is not yet (version-bump.mjs under npm version)
 //   --offline  skip the network checks (directory id collision, private vulnerability reporting)
 //   --strict   warnings fail too
 //   --json     machine-readable output
@@ -26,12 +27,16 @@ const fail = (check, note) => results.push({ level: "FAIL", check, note });
 // `--name value` or `--name=value`; a missing value, or a following flag in its place, is a usage failure recorded like any other result.
 const value = (name) => {
   const joined = args.find((a) => a.startsWith(`${name}=`));
+  const i = args.indexOf(name);
+  if (joined !== undefined && i !== -1) {
+    fail("usage", `${name} given twice`);
+    return undefined;
+  }
   if (joined !== undefined) {
     const v = joined.slice(name.length + 1);
     if (!v) fail("usage", `${name} needs a value`);
     return v || undefined;
   }
-  const i = args.indexOf(name);
   if (i === -1) return undefined;
   if (i + 1 >= args.length || args[i + 1].startsWith("--")) {
     fail("usage", `${name} needs a value`);
@@ -63,6 +68,8 @@ function report() {
 
 const rootArg = value("--root");
 const tag = value("--tag");
+// version-bump.mjs runs under `npm version`, after npm has bumped package.json and before manifest.json follows; it names the version so the two may differ in exactly that way.
+const bumpingTo = value("--bumping-to");
 const root = resolve(rootArg ?? ".");
 if (results.some((r) => r.check === "usage")) report();
 if (!existsSync(root) || !statSync(root).isDirectory()) {
@@ -187,8 +194,10 @@ if (pkgRead.missing) fail("package.json", "missing");
 else if (pkgRead.error) fail("package.json", `does not parse: ${pkgRead.error}`);
 else {
   const pkg = pkgRead.data;
-  if (manifest?.version && pkg.version !== manifest.version) fail("package.json version", `${pkg.version} differs from manifest ${manifest.version}`);
-  else if (manifest?.version) pass("package.json version", pkg.version);
+  if (manifest?.version && pkg.version !== manifest.version) {
+    if (bumpingTo && pkg.version === bumpingTo) pass("package.json version", `${pkg.version}, being bumped from manifest ${manifest.version}`);
+    else fail("package.json version", `${pkg.version} differs from manifest ${manifest.version}`);
+  } else if (manifest?.version) pass("package.json version", pkg.version);
   if (!pkg.scripts?.build) warn("package.json scripts.build", "missing; the release workflow runs npm run build");
 }
 
@@ -321,12 +330,13 @@ async function checkDirectory() {
   } catch (e) {
     return [["WARN", "directory", `could not fetch community-plugins.json (${e.message}); rerun online or pass --offline`]];
   }
-  const byId = list.find((p) => p.id === manifest.id);
+  if (!Array.isArray(list)) return [["WARN", "directory", "community-plugins.json did not parse as a list; rerun online later or pass --offline"]];
+  const byId = list.find((p) => p?.id === manifest.id);
   if (byId && slug && byId.repo.toLowerCase() === slug.toLowerCase()) out.push(["PASS", "directory: id", `${manifest.id} is already listed for ${slug}`]);
   // A listed id under another repo is a warning here: a plugin whose repo moved must still release and preflight. kit-submit refuses to claim an id that is taken.
   else if (byId) out.push(["WARN", "directory: id", `"${manifest.id}" is listed for ${byId.repo}, not ${slug ?? "this repo"}; fine if the repo moved, otherwise choose another id (kit-submit refuses a taken id)`]);
   else out.push(["PASS", "directory: id", `${manifest.id} is free`]);
-  const byName = list.find((p) => p.name.toLowerCase() === String(manifest.name).toLowerCase() && p.id !== manifest.id);
+  const byName = list.find((p) => String(p?.name ?? "").toLowerCase() === String(manifest.name).toLowerCase() && p?.id !== manifest.id);
   if (byName) out.push(["WARN", "directory: name", `"${manifest.name}" is already used by ${byName.repo} (${byName.id})`]);
   return out;
 }
@@ -339,8 +349,11 @@ async function checkPrivateReporting() {
   let outcome;
   try {
     const res = await fetch(`https://api.github.com/repos/${slug}/private-vulnerability-reporting`, { headers, signal: AbortSignal.timeout(10_000) });
-    if (res.ok) outcome = (await res.json()).enabled === true ? "on" : "off";
-    else outcome = `HTTP ${res.status}${token ? " with the token given" : " without a token"}`;
+    if (res.ok) {
+      // Only an explicit false is "off" (a failure under --release); any other body is "could not check", a warning.
+      const enabled = (await res.json())?.enabled;
+      outcome = enabled === true ? "on" : enabled === false ? "off" : `an answer without an enabled field`;
+    } else outcome = `HTTP ${res.status}${token ? " with the token given" : " without a token"}`;
   } catch (e) {
     outcome = e.message;
   }

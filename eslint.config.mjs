@@ -34,8 +34,8 @@ export default defineConfig([
   },
   {
     // Test files and test helpers are not plugin code and never run on a phone: node:assert / node:test are the test runner, not a plugin dependency. node:test's test() and describe() return promises by design; they are named as known-safe calls so the floating-promise rule still catches a missing await on vitest's expect(...).rejects.
-    // Script files only: a snapshot or JSON fixture under tests/ would otherwise be matched, and naming a typescript-eslint rule for a file that plugin does not handle is a fatal config error.
-    files: ["**/*.{test,spec}.{ts,tsx,mts,cts,js,mjs,cjs,jsx}", "{tests,test,__tests__}/**/*.{ts,tsx,mts,cts,js,mjs,cjs,jsx}"],
+    // TypeScript test files only: a snapshot or JSON fixture would otherwise be matched, and naming a typescript-eslint rule for a file that plugin does not handle is a fatal config error. A JavaScript test or helper is outside the tsconfig's project service and needs its own allowDefaultProject entry above before it can be linted at all.
+    files: ["**/*.{test,spec}.{ts,tsx,mts,cts}", "{tests,test,__tests__}/**/*.{ts,tsx,mts,cts}"],
     rules: {
       "obsidianmd/no-nodejs-modules": "off",
       "@typescript-eslint/no-floating-promises": [
@@ -45,6 +45,7 @@ export default defineConfig([
     },
   },
   {
-    ignores: ["main.js", "node_modules/", "scripts/", "version-bump.mjs", "esbuild.config.mjs"],
+    // .claude/ holds Claude Code's git worktrees, full copies of the repo, which a flat config does not ignore by itself.
+    ignores: ["main.js", "node_modules/", "scripts/", "version-bump.mjs", "esbuild.config.mjs", "**/.claude/**"],
   },
 ]);

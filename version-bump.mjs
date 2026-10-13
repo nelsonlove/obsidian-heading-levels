@@ -1,17 +1,26 @@
-// Runs from `npm version <bump>`: copies the new package.json version into manifest.json, records it in versions.json against the current minAppVersion, turns the CHANGELOG's "## Unreleased" section into this version's section so the release notes find it, and stages exactly the files it wrote. Standard Obsidian sample-plugin behaviour plus the changelog, keeping each file's own indentation and line endings.
+// Runs from `npm version <bump>`: runs preflight's promise checks, copies the new package.json version into manifest.json, records it in versions.json against the current minAppVersion, turns the CHANGELOG's "## Unreleased" section into this version's section so the release notes find it, and stages exactly the files it wrote. Standard Obsidian sample-plugin behaviour plus the changelog, keeping each file's own indentation and line endings.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { rollChangelog } from "./scripts/changelog.mjs";
 
-// `npm version x.y.z` sets npm_command to "version" and bumps package.json first; `npm run version` (an easy slip) sets it to "run-script" and would roll the Unreleased notes under the version that is already released. Yarn classic's `yarn version` sets no npm_command but does set the lifecycle event.
-const viaVersion = process.env.npm_command === "version" || (process.env.npm_command === undefined && process.env.npm_lifecycle_event === "version");
-if (!viaVersion) {
-  console.error(`version-bump: run this through \`npm version <patch|minor|major|x.y.z>\` (or yarn version), not directly or with npm run (npm_command is ${process.env.npm_command ?? "unset"}, npm_lifecycle_event is ${process.env.npm_lifecycle_event ?? "unset"}).`);
+// `npm version x.y.z` sets npm_command to "version" and bumps package.json first; `npm run version` (an easy slip) sets it to "run-script" and would roll the Unreleased notes under the version that is already released. Only npm is recognised: yarn classic exposes nothing that tells `yarn version` from `yarn run version`.
+if (process.env.npm_command !== "version") {
+  console.error(`version-bump: run this through \`npm version <patch|minor|major|x.y.z>\`, not directly, with npm run, or with another package manager (npm_command is ${process.env.npm_command ?? "unset"}).`);
   process.exit(1);
 }
 const targetVersion = process.env.npm_package_version;
 if (!targetVersion) {
   console.error("version-bump: npm_package_version is not set; run this through `npm version`.");
   process.exit(1);
+}
+
+// The same gate kit-release applies before it writes anything: a template placeholder still in a root doc, or a SECURITY.md that promises a reporting route GitHub says is off, stops the bump here rather than in the Release workflow after the tag is up. Offline, so the bump does not need the network; the Release workflow repeats the checks online.
+if (existsSync("scripts/preflight.mjs")) {
+  const pre = spawnSync(process.execPath, ["scripts/preflight.mjs", "--promises", "--offline", "--bumping-to", targetVersion], { stdio: "inherit" });
+  if (pre.status !== 0) {
+    console.error("version-bump: preflight failed; fix it first (package.json is bumped by npm; `git checkout -- package.json` to undo)");
+    process.exit(1);
+  }
 }
 
 // Every file is read before it is written, so a failure at the end can put the exact bytes back.
@@ -38,36 +47,11 @@ rewrite("versions.json", (v) => (v[targetVersion] = manifest.minAppVersion));
 // Local calendar date, not toISOString(): that is the UTC date, a day ahead in the evening west of Greenwich.
 const today = new Intl.DateTimeFormat("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
-// Same rules as obsidian-release-kit's rollChangelog (bin/lib.mjs; a kit test checks the two agree): the Unreleased body moves under the version heading, placeholder bullets (a line that is only "-" or "*") are dropped, a fresh Unreleased placeholder is left above, and the file's line ending is kept.
 if (existsSync("CHANGELOG.md")) {
-  const text = readFileSync("CHANGELOG.md", "utf8");
-  // Read either ending (a file can carry both after a paste); write back with the one the file mostly uses.
-  const crlfCount = (text.match(/\r\n/g) ?? []).length;
-  const lfCount = (text.match(/\n/g) ?? []).length - crlfCount;
-  const eol = crlfCount > lfCount ? "\r\n" : "\n";
-  const lines = text.split(/\r?\n/);
-  const start = lines.findIndex((l) => /^## \[?Unreleased\]?[ \t]*$/i.test(l));
-  if (start !== -1) {
-    let end = lines.length;
-    for (let i = start + 1; i < lines.length; i++) {
-      if (/^## /.test(lines[i])) {
-        end = i;
-        break;
-      }
-    }
-    const body = lines.slice(start + 1, end).filter((l) => !/^[ \t]*[-*][ \t]*$/.test(l));
-    while (body.length && body[0].trim() === "") body.shift();
-    while (body.length && body[body.length - 1].trim() === "") body.pop();
-    if (body.length === 0) {
-      // Nothing written under Unreleased: no empty version section; the release notes will be GitHub's generated ones.
-      console.error(`version-bump: CHANGELOG.md's Unreleased section is empty; no ${targetVersion} section written`);
-    } else {
-      const section = [`## ${targetVersion} — ${today}`, "", ...body, ""];
-      write("CHANGELOG.md", [...lines.slice(0, start), lines[start].trim(), "", "-", "", ...section, ...lines.slice(end)].join(eol));
-    }
-  } else {
-    console.error("version-bump: CHANGELOG.md has no '## Unreleased' section; nothing rolled into the release notes");
-  }
+  const rolled = rollChangelog(readFileSync("CHANGELOG.md", "utf8"), targetVersion, today);
+  if (rolled.changed) write("CHANGELOG.md", rolled.text);
+  else if (rolled.reason === "no-section") console.error("version-bump: CHANGELOG.md has no '## Unreleased' section; nothing rolled into the release notes");
+  else console.error(`version-bump: CHANGELOG.md's Unreleased section is empty; no ${targetVersion} section written, and the release notes will be GitHub's generated ones`);
 }
 
 // Stage only what was written, so an absent or gitignored CHANGELOG cannot abort the bump. Outside a git work tree there is nothing to stage; inside one, a failing `git add` must fail the bump, or npm would commit and tag a half-done release.
