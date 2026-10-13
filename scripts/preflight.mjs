@@ -5,7 +5,8 @@
 // Usage: node scripts/preflight.mjs [--root <dir>] [--tag <tag>] [--release] [--offline] [--strict] [--json]
 //   --root     the plugin repo (default: current directory)
 //   --tag      the git tag being released; must equal the manifest version exactly
-//   --release  also require the built assets (main.js, manifest.json) to exist, and fail on template placeholders left in the docs
+//   --release  also require the built assets (main.js, manifest.json) to exist, and fail on a broken promise in the docs (a template placeholder left in, a private reporting route GitHub says is off)
+//   --promises fail on a broken promise in the docs without the asset checks; kit-release passes it so the refusal happens before anything is written
 //   --offline  skip the network checks (directory id collision, private vulnerability reporting)
 //   --strict   warnings fail too
 //   --json     machine-readable output
@@ -22,8 +23,14 @@ const pass = (check, note = "") => results.push({ level: "PASS", check, note });
 const warn = (check, note) => results.push({ level: "WARN", check, note });
 const fail = (check, note) => results.push({ level: "FAIL", check, note });
 
-// `--name value`; a missing value, or a following flag in its place, is a usage failure recorded like any other result.
+// `--name value` or `--name=value`; a missing value, or a following flag in its place, is a usage failure recorded like any other result.
 const value = (name) => {
+  const joined = args.find((a) => a.startsWith(`${name}=`));
+  if (joined !== undefined) {
+    const v = joined.slice(name.length + 1);
+    if (!v) fail("usage", `${name} needs a value`);
+    return v || undefined;
+  }
   const i = args.indexOf(name);
   if (i === -1) return undefined;
   if (i + 1 >= args.length || args[i + 1].startsWith("--")) {
@@ -32,6 +39,8 @@ const value = (name) => {
   }
   return args[i + 1];
 };
+// --promises (kit-release passes it) and --release both turn a broken promise in the docs into a failure: a template placeholder still in a root doc, or SECURITY.md claiming a reporting route GitHub says is off.
+const strictDocs = flag("--release") || flag("--promises");
 
 const DIRECTORY_URL = "https://raw.githubusercontent.com/obsidianmd/obsidian-releases/HEAD/community-plugins.json";
 const DESCRIPTION_MAX = 250;
@@ -100,7 +109,7 @@ function sourceFiles() {
         continue; // a dangling symlink or an unreadable entry is not source
       }
       if (st.isDirectory()) walk(p);
-      else if (/\.(ts|tsx|js|mjs)$/.test(name) && name !== "main.js" && !/\.(test|spec)\./.test(name)) out.push(p);
+      else if (/\.(ts|tsx|mts|cts|js|mjs|cjs)$/.test(name) && name !== "main.js" && !/\.(test|spec)\./.test(name)) out.push(p);
     }
   };
   const src = join(root, "src");
@@ -230,11 +239,10 @@ const docs = { "README.md": readme, "PRIVACY.md": readText("PRIVACY.md"), "SECUR
 for (const [doc, text] of Object.entries(docs)) {
   if (text === null) continue;
   const problems = [];
-  const hasTodo = /<!--\s*TODO/i.test(text);
-  if (hasTodo) problems.push('a "<!-- TODO" comment');
-  // The template always ships its "A. / B." pair under a "<!-- TODO" marker, so the pair counts only while the marker is still there; ordinary prose with a slash is left alone.
-  if (hasTodo && /^.+[a-z`)]\. \/ [A-Z`].+$/m.test(text)) problems.push('two sentences joined by " / "');
-  if (problems.length) (flag("--release") ? fail : warn)(`${doc}: placeholders`, `${problems.join(" and ")} left from the template; keep the true sentence and delete the rest`);
+  if (/<!--\s*TODO/i.test(text)) problems.push('a "<!-- TODO" comment');
+  // The template's own sentence pairs, by their literal text, so an unresolved pair is caught even after the TODO comment was deleted, and ordinary prose with a slash is left alone.
+  if (/ has no settings and stores nothing\. \/ /.test(text) || /It makes no network requests\. \/ It talks to/.test(text)) problems.push('two sentences joined by " / "');
+  if (problems.length) (strictDocs ? fail : warn)(`${doc}: placeholders`, `${problems.join(" and ")} left from the template; keep the true sentence and delete the rest`);
 }
 
 // --- source -----------------------------------------------------------------
@@ -334,7 +342,7 @@ async function checkPrivateReporting() {
   }
   if (outcome === "on") return [["PASS", "SECURITY.md: private reporting", "enabled on GitHub, as the file says"]];
   // Known to be off: a release must not ship a reporting route that does not exist, so under --release this fails. (GitHub has no such setting on a private repo and answers 404, which is "could not check": a warning, since the repo may go public with the release.)
-  if (outcome === "off") return [[flag("--release") ? "FAIL" : "WARN", "SECURITY.md: private reporting", `the file says it is enabled; it is not. Run: gh api -X PUT repos/${slug}/private-vulnerability-reporting`]];
+  if (outcome === "off") return [[strictDocs ? "FAIL" : "WARN", "SECURITY.md: private reporting", `the file says it is enabled; it is not. Run: gh api -X PUT repos/${slug}/private-vulnerability-reporting`]];
   return [["WARN", "SECURITY.md: private reporting", `could not check (${outcome}); the file says it is enabled`]];
 }
 

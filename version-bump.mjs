@@ -1,7 +1,12 @@
-// Runs from `npm version <bump>`: copies the new package.json version into manifest.json, records it in versions.json against the current minAppVersion, turns the CHANGELOG's "## Unreleased" section into this version's section so the release notes find it, and stages exactly the files it wrote. Standard Obsidian sample-plugin behaviour plus the changelog, keeping each file's own indentation.
+// Runs from `npm version <bump>`: copies the new package.json version into manifest.json, records it in versions.json against the current minAppVersion, turns the CHANGELOG's "## Unreleased" section into this version's section so the release notes find it, and stages exactly the files it wrote. Standard Obsidian sample-plugin behaviour plus the changelog, keeping each file's own indentation and line endings.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
+// `npm version x.y.z` sets npm_command to "version" and bumps package.json first; `npm run version` (an easy slip) sets it to "run-script" and would roll the Unreleased notes under the version that is already released.
+if (process.env.npm_command !== "version") {
+  console.error(`version-bump: run this through \`npm version <patch|minor|major|x.y.z>\`, not directly or with npm run (npm_command is ${process.env.npm_command ?? "unset"}).`);
+  process.exit(1);
+}
 const targetVersion = process.env.npm_package_version;
 if (!targetVersion) {
   console.error("version-bump: npm_package_version is not set; run this through `npm version`.");
@@ -32,9 +37,11 @@ rewrite("versions.json", (v) => (v[targetVersion] = manifest.minAppVersion));
 // Local calendar date, not toISOString(): that is the UTC date, a day ahead in the evening west of Greenwich.
 const today = new Intl.DateTimeFormat("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
-// Same rules as obsidian-release-kit's rollChangelog (bin/lib.mjs; a kit test checks the two agree): the Unreleased body moves under the version heading, placeholder bullets (a line that is only "-" or "*") are dropped, and a fresh Unreleased placeholder is left above.
+// Same rules as obsidian-release-kit's rollChangelog (bin/lib.mjs; a kit test checks the two agree): the Unreleased body moves under the version heading, placeholder bullets (a line that is only "-" or "*") are dropped, a fresh Unreleased placeholder is left above, and the file's line ending is kept.
 if (existsSync("CHANGELOG.md")) {
-  const lines = readFileSync("CHANGELOG.md", "utf8").split("\n");
+  const text = readFileSync("CHANGELOG.md", "utf8");
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const lines = text.split(eol);
   const start = lines.findIndex((l) => /^## \[?Unreleased\]?[ \t]*$/i.test(l));
   if (start !== -1) {
     let end = lines.length;
@@ -52,7 +59,7 @@ if (existsSync("CHANGELOG.md")) {
       console.error(`version-bump: CHANGELOG.md's Unreleased section is empty; no ${targetVersion} section written`);
     } else {
       const section = [`## ${targetVersion} — ${today}`, "", ...body, ""];
-      write("CHANGELOG.md", [...lines.slice(0, start), lines[start].trim(), "", "-", "", ...section, ...lines.slice(end)].join("\n"));
+      write("CHANGELOG.md", [...lines.slice(0, start), lines[start].trim(), "", "-", "", ...section, ...lines.slice(end)].join(eol));
     }
   } else {
     console.error("version-bump: CHANGELOG.md has no '## Unreleased' section; nothing rolled into the release notes");
