@@ -1,7 +1,7 @@
 {
   "id": "heading-levels",
   "name": "Heading Levels",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "minAppVersion": "1.5.0",
   "description": "Org-mode-style heading promote/demote commands: heading, subtree, selection, and whole-note variants. Unbound by default — assign hotkeys in Settings → Hotkeys.",
   "author": "Nelson Love",

@@ -1,6 +1,6 @@
 {
   "name": "obsidian-heading-levels",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Org-mode-style heading promotion/demotion for Obsidian, driven from the editor.",
   "type": "module",
   "main": "main.js",
