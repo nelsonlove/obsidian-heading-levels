@@ -18,7 +18,7 @@ if (!targetVersion) {
 if (existsSync("scripts/preflight.mjs")) {
   const pre = spawnSync(process.execPath, ["scripts/preflight.mjs", "--promises", "--offline", "--bumping-to", targetVersion], { stdio: "inherit" });
   if (pre.status !== 0) {
-    console.error("version-bump: preflight failed; fix it first (package.json is bumped by npm; `git checkout -- package.json` to undo)");
+    console.error("version-bump: preflight failed; fix it first (npm has already bumped package.json and package-lock.json: `git checkout -- package.json package-lock.json` to undo)");
     process.exit(1);
   }
 }
@@ -76,9 +76,9 @@ if (inGit) {
     try {
       execFileSync("git", ["add", ...stageable], { stdio: "inherit" });
     } catch (e) {
-      // Put the files back as they were; npm's own package.json bump is the one change left, and npm reports the failure.
+      // Put the files back as they were; npm's own bump of package.json and package-lock.json is what is left, and npm reports the failure.
       for (const [path, text] of originals) writeFileSync(path, text);
-      console.error(`version-bump: git add failed (${e.message}); ${[...originals.keys()].join(", ")} were put back as they were, and nothing is staged. Fix git (an index.lock?) and run npm version again.`);
+      console.error(`version-bump: git add failed (${e.message}); ${[...originals.keys()].join(", ")} were put back as they were, and nothing is staged. Fix git (an index.lock?), \`git checkout -- package.json package-lock.json\`, and run npm version again.`);
       process.exit(1);
     }
   }

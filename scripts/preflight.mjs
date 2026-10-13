@@ -332,7 +332,7 @@ async function checkDirectory() {
   }
   if (!Array.isArray(list)) return [["WARN", "directory", "community-plugins.json did not parse as a list; rerun online later or pass --offline"]];
   const byId = list.find((p) => p?.id === manifest.id);
-  if (byId && slug && byId.repo.toLowerCase() === slug.toLowerCase()) out.push(["PASS", "directory: id", `${manifest.id} is already listed for ${slug}`]);
+  if (byId && slug && String(byId.repo ?? "").toLowerCase() === slug.toLowerCase()) out.push(["PASS", "directory: id", `${manifest.id} is already listed for ${slug}`]);
   // A listed id under another repo is a warning here: a plugin whose repo moved must still release and preflight. kit-submit refuses to claim an id that is taken.
   else if (byId) out.push(["WARN", "directory: id", `"${manifest.id}" is listed for ${byId.repo}, not ${slug ?? "this repo"}; fine if the repo moved, otherwise choose another id (kit-submit refuses a taken id)`]);
   else out.push(["PASS", "directory: id", `${manifest.id} is free`]);

@@ -5,24 +5,30 @@
 /** A line that is only a bullet marker: the template's placeholder, never a note. */
 export const isPlaceholder = (line) => /^[ \t]*[-*][ \t]*$/.test(line);
 
-/** Finds the section whose heading matches `headingRe` (tested against a heading line without its line ending). Returns { headingStart, bodyStart, end, eol } as offsets into `text`, or null. `end` is the offset of the next "## " heading, or text.length. */
+/** Finds the section whose heading matches `headingRe` (tested against a heading line without its line ending). Returns { headingStart, bodyStart, end, eol } as offsets into `text`, or null. `end` is the offset of the next "## " heading outside a fenced code block, or text.length. A heading inside a ``` or ~~~ fence is quoted text, not a section. */
 export function findSection(text, headingRe) {
   const lineRe = /^(.*?)(\r?\n|$)/gm;
   let m;
+  let fence = null; // the fence marker that is open, e.g. "```" or "~~~~"
+  let found = null;
   while ((m = lineRe.exec(text)) !== null) {
     if (m[0] === "" && m.index >= text.length) break;
     const line = m[1];
-    if (headingRe.test(line)) {
-      const headingStart = m.index;
-      const eol = m[2] || "\n";
-      const bodyStart = m.index + m[0].length;
-      const rest = text.slice(bodyStart);
-      const next = rest.search(/^## /m);
-      return { headingStart, bodyStart, end: next === -1 ? text.length : bodyStart + next, eol };
+    const fenceMark = /^[ \t]{0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (fenceMark) {
+      if (fence === null) fence = fenceMark;
+      else if (fenceMark[0] === fence[0] && fenceMark.length >= fence.length) fence = null;
+    } else if (fence === null) {
+      if (found === null && headingRe.test(line)) {
+        found = { headingStart: m.index, bodyStart: m.index + m[0].length, end: text.length, eol: m[2] || "\n" };
+      } else if (found !== null && /^## /.test(line)) {
+        found.end = m.index;
+        return found;
+      }
     }
     if (m[0] === "") lineRe.lastIndex++;
   }
-  return null;
+  return found;
 }
 
 /** The notes of one section, placeholder bullets dropped, leading and trailing blank lines trimmed; an array of lines. */
