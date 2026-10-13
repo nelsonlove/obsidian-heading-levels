@@ -44,6 +44,8 @@ const strictDocs = flag("--release") || flag("--promises");
 
 const DIRECTORY_URL = "https://raw.githubusercontent.com/obsidianmd/obsidian-releases/HEAD/community-plugins.json";
 const DESCRIPTION_MAX = 250;
+// The "A. / B." sentence pairs the kit's README and PRIVACY templates ship for the maintainer to resolve. Keep in step with template/README.template.md and template/PRIVACY.md.
+const TEMPLATE_PAIRS = [/ has no settings and stores nothing\. \/ /, /It makes no network requests\. \/ It talks to/];
 
 function report() {
   const failures = results.filter((r) => r.level === "FAIL");
@@ -240,8 +242,10 @@ for (const [doc, text] of Object.entries(docs)) {
   if (text === null) continue;
   const problems = [];
   if (/<!--\s*TODO/i.test(text)) problems.push('a "<!-- TODO" comment');
-  // The template's own sentence pairs, by their literal text, so an unresolved pair is caught even after the TODO comment was deleted, and ordinary prose with a slash is left alone.
-  if (/ has no settings and stores nothing\. \/ /.test(text) || /It makes no network requests\. \/ It talks to/.test(text)) problems.push('two sentences joined by " / "');
+  // The template's own sentence pairs by their literal text (TEMPLATE_PAIRS below is the one place to update when a template sentence changes), so an unresolved pair is caught even after the TODO comment was deleted, and ordinary prose with a slash is left alone; and the template's angle-bracket fill-ins, which never belong in a finished doc.
+  if (TEMPLATE_PAIRS.some((re) => re.test(text))) problems.push('two sentences joined by " / "');
+  const tokens = text.match(/<(endpoint|purpose|what is sent)>/g);
+  if (tokens) problems.push(`the fill-in${tokens.length > 1 ? "s" : ""} ${[...new Set(tokens)].join(", ")}`);
   if (problems.length) (strictDocs ? fail : warn)(`${doc}: placeholders`, `${problems.join(" and ")} left from the template; keep the true sentence and delete the rest`);
 }
 

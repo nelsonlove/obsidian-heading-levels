@@ -8,8 +8,8 @@ let defaultBrands = ["Obsidian", "Obsidian Sync", "Obsidian Publish", "iOS", "ma
 try {
   const mod = await import("eslint-plugin-obsidianmd/dist/lib/rules/ui/brands.js");
   if (Array.isArray(mod.DEFAULT_BRANDS) && mod.DEFAULT_BRANDS.length) defaultBrands = mod.DEFAULT_BRANDS;
-} catch {
-  // fallback list above
+} catch (e) {
+  console.warn(`eslint.config.mjs: could not read eslint-plugin-obsidianmd's default brand list (${e.message}); sentence case will flag brands the fallback list lacks`);
 }
 // The plugin's own name, from manifest.json at adopt time; an empty name adds nothing (an empty brand would make the matcher loop forever).
 const pluginName = "Heading Levels";
@@ -34,7 +34,8 @@ export default defineConfig([
   },
   {
     // Test files and test helpers are not plugin code and never run on a phone: node:assert / node:test are the test runner, not a plugin dependency. node:test's test() and describe() return promises by design; they are named as known-safe calls so the floating-promise rule still catches a missing await on vitest's expect(...).rejects.
-    files: ["**/*.{test,spec}.*", "tests/**", "test/**", "__tests__/**"],
+    // Script files only: a snapshot or JSON fixture under tests/ would otherwise be matched, and naming a typescript-eslint rule for a file that plugin does not handle is a fatal config error.
+    files: ["**/*.{test,spec}.{ts,tsx,mts,cts,js,mjs,cjs,jsx}", "{tests,test,__tests__}/**/*.{ts,tsx,mts,cts,js,mjs,cjs,jsx}"],
     rules: {
       "obsidianmd/no-nodejs-modules": "off",
       "@typescript-eslint/no-floating-promises": [

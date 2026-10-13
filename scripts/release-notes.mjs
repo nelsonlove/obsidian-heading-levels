@@ -6,12 +6,13 @@
 import { existsSync, readFileSync } from "node:fs";
 
 const args = process.argv.slice(2);
+// --file takes `--file path` or `--file=path`. The version is the positional that is not the --file value, whichever order they come in. (-1 when there is no two-token --file: fileIdx + 1 would be 0, the first positional.)
+const joined = args.find((a) => a.startsWith("--file="));
 const fileIdx = args.indexOf("--file");
-// The version is the positional that is not the --file value, whichever order they come in. (-1 when there is no --file: fileIdx + 1 would be 0, the first positional.)
 const fileValueIdx = fileIdx === -1 ? -1 : fileIdx + 1;
-const file = fileIdx === -1 ? "CHANGELOG.md" : args[fileValueIdx];
+const file = joined !== undefined ? joined.slice("--file=".length) : fileIdx === -1 ? "CHANGELOG.md" : args[fileValueIdx];
 const version = args.find((a, i) => !a.startsWith("--") && i !== fileValueIdx);
-if (!version || (fileIdx !== -1 && (!file || file.startsWith("--")))) {
+if (!version || !file || file.startsWith("--")) {
   console.error("usage: release-notes <version> [--file CHANGELOG.md]");
   process.exit(2);
 }

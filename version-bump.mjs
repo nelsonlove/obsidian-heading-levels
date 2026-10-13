@@ -2,9 +2,10 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
-// `npm version x.y.z` sets npm_command to "version" and bumps package.json first; `npm run version` (an easy slip) sets it to "run-script" and would roll the Unreleased notes under the version that is already released.
-if (process.env.npm_command !== "version") {
-  console.error(`version-bump: run this through \`npm version <patch|minor|major|x.y.z>\`, not directly or with npm run (npm_command is ${process.env.npm_command ?? "unset"}).`);
+// `npm version x.y.z` sets npm_command to "version" and bumps package.json first; `npm run version` (an easy slip) sets it to "run-script" and would roll the Unreleased notes under the version that is already released. Yarn classic's `yarn version` sets no npm_command but does set the lifecycle event.
+const viaVersion = process.env.npm_command === "version" || (process.env.npm_command === undefined && process.env.npm_lifecycle_event === "version");
+if (!viaVersion) {
+  console.error(`version-bump: run this through \`npm version <patch|minor|major|x.y.z>\` (or yarn version), not directly or with npm run (npm_command is ${process.env.npm_command ?? "unset"}, npm_lifecycle_event is ${process.env.npm_lifecycle_event ?? "unset"}).`);
   process.exit(1);
 }
 const targetVersion = process.env.npm_package_version;
@@ -40,8 +41,11 @@ const today = new Intl.DateTimeFormat("sv-SE", { year: "numeric", month: "2-digi
 // Same rules as obsidian-release-kit's rollChangelog (bin/lib.mjs; a kit test checks the two agree): the Unreleased body moves under the version heading, placeholder bullets (a line that is only "-" or "*") are dropped, a fresh Unreleased placeholder is left above, and the file's line ending is kept.
 if (existsSync("CHANGELOG.md")) {
   const text = readFileSync("CHANGELOG.md", "utf8");
-  const eol = text.includes("\r\n") ? "\r\n" : "\n";
-  const lines = text.split(eol);
+  // Read either ending (a file can carry both after a paste); write back with the one the file mostly uses.
+  const crlfCount = (text.match(/\r\n/g) ?? []).length;
+  const lfCount = (text.match(/\n/g) ?? []).length - crlfCount;
+  const eol = crlfCount > lfCount ? "\r\n" : "\n";
+  const lines = text.split(/\r?\n/);
   const start = lines.findIndex((l) => /^## \[?Unreleased\]?[ \t]*$/i.test(l));
   if (start !== -1) {
     let end = lines.length;
