@@ -31,7 +31,7 @@ Six commands are available in the palette and bindable in
 ## Development
 
 ```bash
-npm install
+npm ci          # package-lock.json is committed; npm install would rewrite it
 npm test        # vitest — the heading math is a pure, fully-tested module
 npm run dev     # esbuild watch
 npm run build   # typecheck + production bundle -> main.js

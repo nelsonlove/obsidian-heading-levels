@@ -192,7 +192,8 @@ else {
 // `npm version` is wired up by the version script; without tag-version-prefix= it tags v1.2.3, which the release workflow ignores.
 if (pkgRead.data?.scripts?.version) {
   const npmrc = readText(".npmrc");
-  const has = npmrc !== null && npmrc.split("\n").some((l) => l.trim() === "tag-version-prefix=");
+  // Every spelling npm's ini loader reads as an empty prefix: `tag-version-prefix=`, `tag-version-prefix = `, `tag-version-prefix=""`.
+  const has = npmrc !== null && npmrc.split("\n").some((l) => /^\s*tag-version-prefix\s*=\s*(""|'')?\s*$/.test(l));
   if (has) pass(".npmrc", "tag-version-prefix= set");
   else warn(".npmrc", "no tag-version-prefix= line; npm version would tag v1.2.3, which the release workflow ignores (kit-adopt adds the line)");
 }
@@ -229,9 +230,10 @@ const docs = { "README.md": readme, "PRIVACY.md": readText("PRIVACY.md"), "SECUR
 for (const [doc, text] of Object.entries(docs)) {
   if (text === null) continue;
   const problems = [];
-  if (/<!--\s*TODO/i.test(text)) problems.push('a "<!-- TODO" comment');
-  // The template's shape exactly: one line, a sentence ending in a period, " / ", then a capitalised alternative. Not a shortcut like "Cmd+. / Ctrl+." or prose across lines.
-  if (/^.+[a-z`)]\. \/ [A-Z`].+$/m.test(text)) problems.push('two sentences joined by " / "');
+  const hasTodo = /<!--\s*TODO/i.test(text);
+  if (hasTodo) problems.push('a "<!-- TODO" comment');
+  // The template always ships its "A. / B." pair under a "<!-- TODO" marker, so the pair counts only while the marker is still there; ordinary prose with a slash is left alone.
+  if (hasTodo && /^.+[a-z`)]\. \/ [A-Z`].+$/m.test(text)) problems.push('two sentences joined by " / "');
   if (problems.length) (flag("--release") ? fail : warn)(`${doc}: placeholders`, `${problems.join(" and ")} left from the template; keep the true sentence and delete the rest`);
 }
 
@@ -331,7 +333,8 @@ async function checkPrivateReporting() {
     outcome = e.message;
   }
   if (outcome === "on") return [["PASS", "SECURITY.md: private reporting", "enabled on GitHub, as the file says"]];
-  if (outcome === "off") return [["WARN", "SECURITY.md: private reporting", `the file says it is enabled; it is not. Run: gh api -X PUT repos/${slug}/private-vulnerability-reporting`]];
+  // Known to be off: a release must not ship a reporting route that does not exist, so under --release this fails. (GitHub has no such setting on a private repo and answers 404, which is "could not check": a warning, since the repo may go public with the release.)
+  if (outcome === "off") return [[flag("--release") ? "FAIL" : "WARN", "SECURITY.md: private reporting", `the file says it is enabled; it is not. Run: gh api -X PUT repos/${slug}/private-vulnerability-reporting`]];
   return [["WARN", "SECURITY.md: private reporting", `could not check (${outcome}); the file says it is enabled`]];
 }
 

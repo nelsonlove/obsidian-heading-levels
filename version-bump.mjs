@@ -47,8 +47,13 @@ if (existsSync("CHANGELOG.md")) {
     const body = lines.slice(start + 1, end).filter((l) => !/^[ \t]*[-*][ \t]*$/.test(l));
     while (body.length && body[0].trim() === "") body.shift();
     while (body.length && body[body.length - 1].trim() === "") body.pop();
-    const section = [`## ${targetVersion} — ${today}`, "", ...(body.length ? [...body, ""] : [])];
-    write("CHANGELOG.md", [...lines.slice(0, start), lines[start].trim(), "", "-", "", ...section, ...lines.slice(end)].join("\n"));
+    if (body.length === 0) {
+      // Nothing written under Unreleased: no empty version section; the release notes will be GitHub's generated ones.
+      console.error(`version-bump: CHANGELOG.md's Unreleased section is empty; no ${targetVersion} section written`);
+    } else {
+      const section = [`## ${targetVersion} — ${today}`, "", ...body, ""];
+      write("CHANGELOG.md", [...lines.slice(0, start), lines[start].trim(), "", "-", "", ...section, ...lines.slice(end)].join("\n"));
+    }
   } else {
     console.error("version-bump: CHANGELOG.md has no '## Unreleased' section; nothing rolled into the release notes");
   }
